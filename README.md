@@ -1,4 +1,4 @@
-# Keystone
+# :gem: Keystone
 
 A small Golang library that makes working with the stdlib `html/template` easy!
 
