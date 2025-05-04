@@ -1,6 +1,7 @@
 package keystone
 
 import (
+	"fmt"
 	"html/template"
 	"io/fs"
 	"sync"
@@ -13,7 +14,7 @@ type Keystone struct {
 	templateCache   map[string]*template.Template
 	templateFuncMap template.FuncMap
 	mu              sync.RWMutex
-	hotReload       bool
+	reload          bool
 }
 
 func New(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns template.FuncMap) (*Keystone, error) {
@@ -23,7 +24,7 @@ func New(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns 
 		baseTemplate:    nil,
 		templateCache:   make(map[string]*template.Template),
 		templateFuncMap: templateFns,
-		hotReload:       false,
+		reload:          false,
 	}
 
 	err := ks.Load()
@@ -34,13 +35,13 @@ func New(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns 
 	return ks, nil
 }
 
-func NewWithHotReload(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns template.FuncMap) (*Keystone, error) {
+func NewWithReload(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns template.FuncMap) (*Keystone, error) {
 	ks, err := New(baseTemplateFS, pagesTemplateFS, templateFns)
 	if err != nil {
 		return ks, err
 	}
 
-	ks.hotReload = true
+	ks.reload = true
 	return ks, nil
 }
 
@@ -51,11 +52,38 @@ func (ks *Keystone) Load() error {
 	}
 
 	ks.baseTemplate = base
-	return nil
+
+	err = ks.insertPageTemplates("pages")
+	fmt.Println(ks.templateCache)
+	return err
 }
 
-// func (ks *Keystone) insertTemplates(templates *template.Template, base *template.Template) error {
-// }
+func (ks *Keystone) insertPageTemplates(path string) error {
+	dirContents, err := ks.pagesSource.ReadDir(path)
+	if err != nil {
+		return err
+	}
+
+	for _, e := range dirContents {
+		if e.IsDir() {
+			continue // recurse here for subdir support
+		}
+
+		bc, err := ks.baseTemplate.Clone()
+		if err != nil {
+			return err
+		}
+
+		tn := e.Name()
+		t, err := bc.ParseFS(ks.pagesSource, path+"/"+tn) // recursed dirpath here
+		if err != nil {
+			return fmt.Errorf("could not parse %v, %v", tn, err)
+		}
+		ks.templateCache[path+"/"+e.Name()] = t
+	}
+
+	return nil
+}
 
 func (ks *Keystone) Exists(name string) bool {
 	_, exists := ks.templateCache[name]

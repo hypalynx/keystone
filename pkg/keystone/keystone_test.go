@@ -15,6 +15,7 @@ func TestTemplateIngestion(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, ks.Exists("components/card.tmpl"))
+	assert.True(t, ks.Exists("pages/test.tmpl"))
 }
 
 func TestEmbeddedPartial(t *testing.T) {
