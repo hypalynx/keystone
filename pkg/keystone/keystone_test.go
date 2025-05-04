@@ -2,16 +2,19 @@ package keystone_test
 
 import (
 	"testing"
+	"text/template"
 
 	"github.com/hypalynx/keystone/pkg/keystone"
 	"github.com/hypalynx/keystone/testdata"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestIngestingTemplates(t *testing.T) {
-	ks := keystone.New(testdata.TestBaseTemplateFS, testdata.TestPagesTemplateFS)
+func TestTemplateIngestion(t *testing.T) {
+	ks, err := keystone.New(testdata.TestBaseTemplateFS, testdata.TestPagesTemplateFS, template.FuncMap{})
 
-	assert.True(t, ks.Exists("test.tmpl"))
+	require.NoError(t, err)
+	assert.True(t, ks.Exists("components/card.tmpl"))
 }
 
 func TestEmbeddedPartial(t *testing.T) {
