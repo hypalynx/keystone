@@ -1,0 +1,8 @@
+{{ define "partials/results.tmpl" }}
+{{ range .Results }}
+<div>
+    <div>{{ .Name }}</div>
+    <div>{{ .Amount }}</div>
+</div>
+{{ end }}
+{{ end }}
