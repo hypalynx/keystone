@@ -103,6 +103,7 @@ func (s *KeystoneReloadTestSuite) TearDownTest() {
 
 func (s *KeystoneReloadTestSuite) TestReload() {
 	ks := &keystone.Registry{
+		Debug:  true,
 		Source: NewTestFS(s.tempDir),
 		Reload: true,
 	}
@@ -160,6 +161,7 @@ func (s *KeystoneReloadTestSuite) TestReload() {
 
 func (s *KeystoneReloadTestSuite) TestNoReload() {
 	ks := &keystone.Registry{
+		Debug:  true,
 		Source: NewTestFS(s.tempDir),
 		Reload: false,
 	}
@@ -217,6 +219,7 @@ func TestKeystoneReloadSuite(t *testing.T) {
 
 func (s *KeystoneReloadTestSuite) TestBadModificationReload() {
 	ks := &keystone.Registry{
+		Debug:  true,
 		Source: NewTestFS(s.tempDir),
 		Reload: true,
 	}

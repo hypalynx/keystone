@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,27 +13,29 @@ import (
 )
 
 type Registry struct {
-	Source           fs.FS
+	Debug            bool
+	Extensions       []string
 	FuncMap          template.FuncMap
 	Reload           bool
-	Extensions       []string
-	extensionsLookup map[string]bool
+	Source           fs.FS
 	baseTemplate     *template.Template
-	templateCache    map[string]*template.Template
+	extensionsLookup map[string]bool
 	mu               sync.RWMutex
+	templateCache    map[string]*template.Template
 }
 
 var defaultExtensions = []string{"tmpl", "html", "gohtml", "gotmpl", "tpl"}
 
 func New(templateFS fs.FS) (*Registry, error) {
 	ks := &Registry{
-		Source:           templateFS,
+		Debug:            false,
 		Extensions:       defaultExtensions,
-		extensionsLookup: make(map[string]bool),
-		baseTemplate:     &template.Template{},
-		templateCache:    make(map[string]*template.Template),
 		FuncMap:          template.FuncMap{},
 		Reload:           false,
+		Source:           templateFS,
+		baseTemplate:     &template.Template{},
+		extensionsLookup: make(map[string]bool),
+		templateCache:    make(map[string]*template.Template),
 	}
 
 	err := ks.Load()
@@ -185,6 +188,14 @@ func (ks *Registry) Render(w io.Writer, name string, data any) error {
 	if tmpl == nil {
 		return fmt.Errorf("could not render %v, template is missing, known templates: %v", name, ks.ListAll())
 	}
+	if ks.Debug {
+		keys := []string{}
+		for _, t := range tmpl.Templates() {
+			keys = append(keys, t.Name())
+		}
+		slog.Info("Rendering template", "name", name, "keys", keys, "level", "debug")
+	}
+
 	return tmpl.ExecuteTemplate(w, filepath.Base(name), data)
 }
 
