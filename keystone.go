@@ -12,25 +12,27 @@ import (
 )
 
 type Registry struct {
-	Source        fs.FS
-	FuncMap       template.FuncMap
-	Reload        bool
-	Extensions    []string
-	baseTemplate  *template.Template
-	templateCache map[string]*template.Template
-	mu            sync.RWMutex
+	Source           fs.FS
+	FuncMap          template.FuncMap
+	Reload           bool
+	Extensions       []string
+	extensionsLookup map[string]bool
+	baseTemplate     *template.Template
+	templateCache    map[string]*template.Template
+	mu               sync.RWMutex
 }
 
 var defaultExtensions = []string{"tmpl", "html", "gohtml", "gotmpl", "tpl"}
 
 func New(templateFS fs.FS) (*Registry, error) {
 	ks := &Registry{
-		Source:        templateFS,
-		Extensions:    defaultExtensions,
-		baseTemplate:  &template.Template{},
-		templateCache: make(map[string]*template.Template),
-		FuncMap:       template.FuncMap{},
-		Reload:        false,
+		Source:           templateFS,
+		Extensions:       defaultExtensions,
+		extensionsLookup: make(map[string]bool),
+		baseTemplate:     &template.Template{},
+		templateCache:    make(map[string]*template.Template),
+		FuncMap:          template.FuncMap{},
+		Reload:           false,
 	}
 
 	err := ks.Load()
@@ -49,6 +51,12 @@ func (ks *Registry) ensureDefaults() error {
 	if ks.Extensions == nil {
 		ks.Extensions = []string{"tmpl", "html", "gohtml", "gotmpl", "tpl"}
 	}
+
+	extMap := make(map[string]bool)
+	for _, ext := range ks.Extensions {
+		extMap[ext] = true
+	}
+	ks.extensionsLookup = extMap
 
 	ks.templateCache = make(map[string]*template.Template)
 
@@ -80,13 +88,13 @@ func (ks *Registry) Load() error {
 	return err
 }
 
+func (ks *Registry) isTemplate(path string) bool {
+	ext := strings.TrimPrefix(filepath.Ext(path), ".")
+	return len(ks.Extensions) == 0 || ks.extensionsLookup[ext]
+}
+
 func (ks *Registry) allFilesInPath() ([]string, error) {
 	fileList := []string{}
-
-	extMap := make(map[string]bool)
-	for _, ext := range ks.Extensions {
-		extMap[ext] = true
-	}
 
 	err := fs.WalkDir(ks.Source, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -94,8 +102,7 @@ func (ks *Registry) allFilesInPath() ([]string, error) {
 		}
 
 		if !d.IsDir() {
-			ext := strings.TrimPrefix(filepath.Ext(path), ".")
-			if len(ks.Extensions) == 0 || extMap[ext] {
+			if ks.isTemplate(path) {
 				fileList = append(fileList, path)
 			}
 		}
@@ -126,6 +133,10 @@ func (ks *Registry) insertTemplates(path string) error {
 			if err := ks.insertTemplates(fullPath); err != nil {
 				return err
 			}
+			continue
+		}
+
+		if !ks.isTemplate(fullPath) {
 			continue
 		}
 
