@@ -196,7 +196,7 @@ func (s *KeystoneReloadTestSuite) TestNoReload() {
 	time.Sleep(100 * time.Millisecond)
 
 	var secondOutput bytes.Buffer
-	err = ks.Render(&secondOutput, "product.tmpl", map[string]any{
+	err = ks.Render(&secondOutput, "pages/product.tmpl", map[string]any{
 		"Title":       "Product Details",
 		"Name":        "Pen",
 		"Description": "This is a pen, you can write with it!",
@@ -219,7 +219,6 @@ func TestKeystoneReloadSuite(t *testing.T) {
 
 func (s *KeystoneReloadTestSuite) TestBadModificationReload() {
 	ks := &keystone.Registry{
-		Debug:  true,
 		Source: NewTestFS(s.tempDir),
 		Reload: true,
 	}
@@ -228,7 +227,7 @@ func (s *KeystoneReloadTestSuite) TestBadModificationReload() {
 	require.NoError(s.T(), err)
 
 	var initialOutput bytes.Buffer
-	err = ks.Render(&initialOutput, "product.tmpl", map[string]any{
+	err = ks.Render(&initialOutput, "pages/product.tmpl", map[string]any{
 		"Title":       "Product Details",
 		"Name":        "Pen",
 		"Description": "This is a pen, you can write with it!",
@@ -257,12 +256,12 @@ func (s *KeystoneReloadTestSuite) TestBadModificationReload() {
 	time.Sleep(100 * time.Millisecond)
 
 	var modifiedOutput bytes.Buffer
-	err = ks.Render(&modifiedOutput, "product.tmpl", map[string]any{
+	err = ks.Render(&modifiedOutput, "pages/product.tmpl", map[string]any{
 		"Title":       "Product Details",
 		"Name":        "Pen",
 		"Description": "This is a pen, you can write with it!",
 		"Stock":       7,
 		"Price":       "£8.99",
 	})
-	require.ErrorContains(s.T(), err, "could not render product.tmpl, template: product.tmpl:4: unexpected \"}\" in operand")
+	require.ErrorContains(s.T(), err, "could not render pages/product.tmpl, template: product.tmpl:4: unexpected \"}\" in operand")
 }

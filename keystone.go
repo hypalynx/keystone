@@ -123,7 +123,6 @@ func (ks *Registry) insertTemplates(path string) error {
 	if err != nil {
 		return err
 	}
-
 	for _, e := range dirContents {
 		var fullPath string
 		if path != "." {
@@ -131,14 +130,12 @@ func (ks *Registry) insertTemplates(path string) error {
 		} else {
 			fullPath = e.Name()
 		}
-
 		if e.IsDir() {
 			if err := ks.insertTemplates(fullPath); err != nil {
 				return err
 			}
 			continue
 		}
-
 		if !ks.isTemplate(fullPath) {
 			continue
 		}
@@ -148,13 +145,20 @@ func (ks *Registry) insertTemplates(path string) error {
 			return err
 		}
 
-		t, err := bc.ParseFS(ks.Source, fullPath)
-		if err != nil {
-			return fmt.Errorf("could not parse %v, %v", fullPath, err)
-		}
-		ks.templateCache[fullPath] = t
-	}
+		namedTemplate := bc.New(fullPath)
 
+		content, err := fs.ReadFile(ks.Source, fullPath)
+		if err != nil {
+			return fmt.Errorf("could not read template file %v: %v", fullPath, err)
+		}
+
+		_, err = namedTemplate.Parse(string(content))
+		if err != nil {
+			return fmt.Errorf("could not parse %v: %v", fullPath, err)
+		}
+
+		ks.templateCache[fullPath] = bc
+	}
 	return nil
 }
 
@@ -193,10 +197,10 @@ func (ks *Registry) Render(w io.Writer, name string, data any) error {
 		for _, t := range tmpl.Templates() {
 			keys = append(keys, t.Name())
 		}
-		slog.Info("Rendering template", "name", name, "keys", keys, "level", "debug")
+		slog.Info("Rendering template", "name", name, "keys", keys)
 	}
 
-	return tmpl.ExecuteTemplate(w, filepath.Base(name), data)
+	return tmpl.ExecuteTemplate(w, name, data)
 }
 
 func (ks *Registry) ListAll() []string {
