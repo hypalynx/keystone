@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"text/template"
 	"time"
 
 	"github.com/hypalynx/keystone/pkg/keystone"
@@ -116,10 +115,12 @@ func (s *KeystoneReloadTestSuite) TearDownTest() {
 }
 
 func (s *KeystoneReloadTestSuite) TestReload() {
-	baseFS := NewTestFS(s.baseDir)
-	pagesFS := NewTestFS(s.pagesDir)
+	ks := &keystone.Registry{
+		Source: NewTestFS(s.tempDir),
+		Reload: true,
+	}
+	err := ks.Load()
 
-	ks, err := keystone.NewWithReload(baseFS, pagesFS, template.FuncMap{})
 	require.NoError(s.T(), err)
 
 	templates := ks.ListAll()
@@ -180,10 +181,11 @@ func (s *KeystoneReloadTestSuite) TestReload() {
 }
 
 func (s *KeystoneReloadTestSuite) TestNoReload() {
-	baseFS := NewTestFS(s.baseDir)
-	pagesFS := NewTestFS(s.pagesDir)
-
-	ks, err := keystone.New(baseFS, pagesFS, template.FuncMap{})
+	ks := &keystone.Registry{
+		Source: NewTestFS(s.tempDir),
+		Reload: false,
+	}
+	err := ks.Load()
 	require.NoError(s.T(), err)
 
 	templates := ks.ListAll()
@@ -242,4 +244,61 @@ func (s *KeystoneReloadTestSuite) TestNoReload() {
 
 func TestKeystoneReloadSuite(t *testing.T) {
 	suite.Run(t, new(KeystoneReloadTestSuite))
+}
+
+func (s *KeystoneReloadTestSuite) TestBadModificationReload() {
+	ks := &keystone.Registry{
+		Source: NewTestFS(s.tempDir),
+		Reload: true,
+	}
+	err := ks.Load()
+
+	require.NoError(s.T(), err)
+
+	templates := ks.ListAll()
+	fmt.Printf("Available templates after initialization: %v\n", templates)
+
+	var initialOutput bytes.Buffer
+	err = ks.Render(&initialOutput, "product.tmpl", map[string]any{
+		"Title":       "Product Details",
+		"Name":        "Pen",
+		"Description": "This is a pen, you can write with it!",
+		"Stock":       7,
+		"Price":       "£8.99",
+	})
+	require.NoError(s.T(), err)
+
+	initialOutputStr := initialOutput.String()
+	fmt.Printf("Initial output:\n%s\n", initialOutputStr)
+	require.NotEmpty(s.T(), initialOutputStr, "Initial template output should not be empty")
+
+	modifiedContent := `{{ template "layouts/default.tmpl" . }}
+{{ define "content" }}
+<div class="product">
+  <h2>{{ .Name }</h2>
+  <p class="description">{{ .Description }}</p>
+  <p class="stock">Available: {{ .Stock }} units</p>
+  <p class="price">Price: {{ .Price }}</p>
+  <button>Add to Cart</button>
+</div>
+{{ end }}`
+
+	err = os.WriteFile(filepath.Join(s.pagesDir, "product.tmpl"), []byte(modifiedContent), 0o644)
+	require.NoError(s.T(), err)
+	fmt.Printf("Modified product.tmpl\n")
+
+	time.Sleep(100 * time.Millisecond)
+
+	templates = ks.ListAll()
+	fmt.Printf("Available templates after modification: %v\n", templates)
+
+	var modifiedOutput bytes.Buffer
+	err = ks.Render(&modifiedOutput, "product.tmpl", map[string]any{
+		"Title":       "Product Details",
+		"Name":        "Pen",
+		"Description": "This is a pen, you can write with it!",
+		"Stock":       7,
+		"Price":       "£8.99",
+	})
+	require.ErrorContains(s.T(), err, "could not render product.tmpl, template: product.tmpl:4: unexpected \"}\" in operand")
 }

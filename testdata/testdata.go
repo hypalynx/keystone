@@ -10,14 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:embed fixtures/* layouts/* components/* pages/* partials/*
+//go:embed fixtures/*
 var TestFixtures embed.FS
 
-//go:embed layouts/* components/* partials/*
-var TestBaseTemplatesFS embed.FS
-
-//go:embed pages/*
-var TestPagesTemplatesFS embed.FS
+//go:embed layouts/* components/* pages/* partials/*
+var TestTemplatesFS embed.FS
 
 func CreateTempFilesystem(t *testing.T) (string, fs.ReadDirFS, fs.ReadDirFS) {
 	tempDir, err := os.MkdirTemp("", "keystone-test")

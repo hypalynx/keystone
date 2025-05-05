@@ -7,28 +7,25 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 )
 
-type Keystone struct {
-	source          fs.ReadDirFS
-	pagesSource     fs.ReadDirFS
-	baseTemplate    *template.Template
-	templateCache   map[string]*template.Template
-	templateFuncMap template.FuncMap
-	mu              sync.RWMutex
-	reload          bool
+type Registry struct {
+	Source        fs.ReadDirFS
+	FuncMap       template.FuncMap
+	Reload        bool
+	baseTemplate  *template.Template
+	templateCache map[string]*template.Template
+	mu            sync.RWMutex
 }
 
-func New(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns template.FuncMap) (*Keystone, error) {
-	ks := &Keystone{
-		source:          baseTemplateFS,
-		pagesSource:     pagesTemplateFS,
-		baseTemplate:    nil,
-		templateCache:   make(map[string]*template.Template),
-		templateFuncMap: templateFns,
-		reload:          false,
+func New(templateFS fs.ReadDirFS) (*Registry, error) {
+	ks := &Registry{
+		Source:        templateFS,
+		baseTemplate:  &template.Template{},
+		templateCache: make(map[string]*template.Template),
+		FuncMap:       template.FuncMap{},
+		Reload:        false,
 	}
 
 	err := ks.Load()
@@ -39,39 +36,31 @@ func New(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns 
 	return ks, nil
 }
 
-func NewWithReload(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, templateFns template.FuncMap) (*Keystone, error) {
-	ks, err := New(baseTemplateFS, pagesTemplateFS, templateFns)
-	if err != nil {
-		return ks, err
-	}
-
-	ks.reload = true
-	return ks, nil
-}
-
-func (ks *Keystone) Load() error {
+func (ks *Registry) Load() error {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
+
+	ks.templateCache = make(map[string]*template.Template)
 
 	templateFiles, err := ks.allFilesInPath()
 	if err != nil {
 		return err
 	}
 
-	base, err := template.New("").Funcs(ks.templateFuncMap).ParseFS(ks.source, templateFiles...)
+	base, err := template.New("").Funcs(ks.FuncMap).ParseFS(ks.Source, templateFiles...)
 	if err != nil {
 		return err
 	}
 
 	ks.baseTemplate = base
 
-	err = ks.insertPageTemplates(".")
+	err = ks.insertTemplates(".")
 	return err
 }
 
-func (ks *Keystone) allFilesInPath() ([]string, error) {
+func (ks *Registry) allFilesInPath() ([]string, error) {
 	fileList := []string{}
-	err := fs.WalkDir(ks.source, ".", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(ks.Source, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -88,8 +77,8 @@ func (ks *Keystone) allFilesInPath() ([]string, error) {
 	return fileList, nil
 }
 
-func (ks *Keystone) insertPageTemplates(path string) error {
-	dirContents, err := ks.pagesSource.ReadDir(path)
+func (ks *Registry) insertTemplates(path string) error {
+	dirContents, err := ks.Source.ReadDir(path)
 	if err != nil {
 		return err
 	}
@@ -103,7 +92,7 @@ func (ks *Keystone) insertPageTemplates(path string) error {
 		}
 
 		if e.IsDir() {
-			if err := ks.insertPageTemplates(fullPath); err != nil {
+			if err := ks.insertTemplates(fullPath); err != nil {
 				return err
 			}
 			continue
@@ -114,7 +103,7 @@ func (ks *Keystone) insertPageTemplates(path string) error {
 			return err
 		}
 
-		t, err := bc.ParseFS(ks.pagesSource, fullPath)
+		t, err := bc.ParseFS(ks.Source, fullPath)
 		if err != nil {
 			return fmt.Errorf("could not parse %v, %v", fullPath, err)
 		}
@@ -124,8 +113,8 @@ func (ks *Keystone) insertPageTemplates(path string) error {
 	return nil
 }
 
-func (ks *Keystone) Get(name string) (*template.Template, error) {
-	if ks.reload {
+func (ks *Registry) Get(name string) (*template.Template, error) {
+	if ks.Reload {
 		err := ks.Load()
 		if err != nil {
 			return nil, err
@@ -141,12 +130,12 @@ func (ks *Keystone) Get(name string) (*template.Template, error) {
 	return tmpl, nil
 }
 
-func (ks *Keystone) Exists(name string) bool {
+func (ks *Registry) Exists(name string) bool {
 	tmpl, err := ks.Get(name)
 	return err == nil && tmpl != nil
 }
 
-func (ks *Keystone) Render(w io.Writer, name string, data any) error {
+func (ks *Registry) Render(w io.Writer, name string, data any) error {
 	tmpl, err := ks.Get(name)
 	if err != nil {
 		return fmt.Errorf("could not render %v, %v", name, err)
@@ -157,18 +146,11 @@ func (ks *Keystone) Render(w io.Writer, name string, data any) error {
 	return tmpl.ExecuteTemplate(w, filepath.Base(name), data)
 }
 
-func (ks *Keystone) ListAll() []string {
+func (ks *Registry) ListAll() []string {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
 
 	names := []string{}
-
-	for _, tmpl := range ks.baseTemplate.Templates() {
-		name := tmpl.Name()
-		if name != "" && name != "content" && strings.Contains(name, "/") {
-			names = append(names, name)
-		}
-	}
 
 	for name := range ks.templateCache {
 		names = append(names, name)

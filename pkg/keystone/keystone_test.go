@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"path/filepath"
 	"testing"
-	"text/template"
 
 	"github.com/hypalynx/keystone/pkg/keystone"
 	"github.com/hypalynx/keystone/testdata"
@@ -14,11 +13,11 @@ import (
 
 type KeystoneTestSuite struct {
 	suite.Suite
-	keystone *keystone.Keystone
+	keystone *keystone.Registry
 }
 
 func (s *KeystoneTestSuite) SetupTest() {
-	ks, err := keystone.New(testdata.TestBaseTemplatesFS, testdata.TestPagesTemplatesFS, template.FuncMap{})
+	ks, err := keystone.New(testdata.TestTemplatesFS)
 	require.NoError(s.T(), err)
 	s.keystone = ks
 }
