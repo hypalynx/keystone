@@ -11,3 +11,7 @@ lint: ensure-lint
 lint-fix: ensure-lint
 	@echo "Running golangci-lint with auto-fix..."
 	@golangci-lint run --config=$(LINT_CONFIG) --fix ./...
+
+cover:
+	go test -coverprofile=coverage.out ./... >/dev/null || true
+	(go tool cover -func=coverage.out | grep -v "total:" | sort -k3 -nr && go tool cover -func=coverage.out | grep "total:")

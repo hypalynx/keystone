@@ -3,7 +3,9 @@ package keystone
 import (
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -48,6 +50,9 @@ func NewWithReload(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, te
 }
 
 func (ks *Keystone) Load() error {
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+
 	templateFiles, err := ks.allFilesInPath()
 	if err != nil {
 		return err
@@ -60,8 +65,7 @@ func (ks *Keystone) Load() error {
 
 	ks.baseTemplate = base
 
-	err = ks.insertPageTemplates("pages")
-	fmt.Println(ks.templateCache)
+	err = ks.insertPageTemplates(".")
 	return err
 }
 
@@ -78,7 +82,6 @@ func (ks *Keystone) allFilesInPath() ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		fmt.Printf("Error walking directory: %v\n", err)
 		return fileList, err
 	}
 
@@ -92,11 +95,18 @@ func (ks *Keystone) insertPageTemplates(path string) error {
 	}
 
 	for _, e := range dirContents {
+		fullPath := path
+		if path != "." {
+			fullPath = path + "/" + e.Name()
+		} else {
+			fullPath = e.Name()
+		}
+
 		if e.IsDir() {
-			if err := ks.insertPageTemplates(path + "/" + e.Name()); err != nil {
+			if err := ks.insertPageTemplates(fullPath); err != nil {
 				return err
 			}
-			continue // recurse here for subdir support
+			continue
 		}
 
 		bc, err := ks.baseTemplate.Clone()
@@ -104,29 +114,53 @@ func (ks *Keystone) insertPageTemplates(path string) error {
 			return err
 		}
 
-		tn := e.Name()
-		t, err := bc.ParseFS(ks.pagesSource, path+"/"+tn) // recursed dirpath here
+		t, err := bc.ParseFS(ks.pagesSource, fullPath)
 		if err != nil {
-			return fmt.Errorf("could not parse %v, %v", tn, err)
+			return fmt.Errorf("could not parse %v, %v", fullPath, err)
 		}
-		ks.templateCache[path+"/"+e.Name()] = t
+		ks.templateCache[fullPath] = t
 	}
 
 	return nil
 }
 
-func (ks *Keystone) Exists(name string) bool {
-	_, exists := ks.templateCache[name]
-	if !exists {
-		tmpl := ks.baseTemplate.Lookup(name)
-		if tmpl != nil {
-			return true
+func (ks *Keystone) Get(name string) (*template.Template, error) {
+	if ks.reload {
+		err := ks.Load()
+		if err != nil {
+			return nil, err
 		}
 	}
-	return exists
+
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+	tmpl, exists := ks.templateCache[name]
+	if !exists {
+		return ks.baseTemplate.Lookup(name), nil
+	}
+	return tmpl, nil
+}
+
+func (ks *Keystone) Exists(name string) bool {
+	tmpl, err := ks.Get(name)
+	return err == nil && tmpl != nil
+}
+
+func (ks *Keystone) Render(w io.Writer, name string, data any) error {
+	tmpl, err := ks.Get(name)
+	if err != nil {
+		return fmt.Errorf("could not render %v, %v", name, err)
+	}
+	if tmpl == nil {
+		return fmt.Errorf("could not render %v, template is missing, known templates: %v", name, ks.ListAll())
+	}
+	return tmpl.ExecuteTemplate(w, filepath.Base(name), data)
 }
 
 func (ks *Keystone) ListAll() []string {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
 	names := []string{}
 
 	for _, tmpl := range ks.baseTemplate.Templates() {
@@ -143,6 +177,3 @@ func (ks *Keystone) ListAll() []string {
 	sort.Strings(names)
 	return names
 }
-
-// read in
-// provide Render interface

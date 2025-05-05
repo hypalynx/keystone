@@ -1,21 +1,30 @@
 package keystone_test
 
 import (
+	"bytes"
+	"path/filepath"
 	"testing"
 	"text/template"
 
 	"github.com/hypalynx/keystone/pkg/keystone"
 	"github.com/hypalynx/keystone/testdata"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestTemplateIngestion(t *testing.T) {
-	ks, err := keystone.New(testdata.TestBaseTemplateFS, testdata.TestPagesTemplateFS, template.FuncMap{})
+type KeystoneTestSuite struct {
+	suite.Suite
+	keystone *keystone.Keystone
+}
 
-	require.NoError(t, err)
-	assert.Equal(
-		t,
+func (s *KeystoneTestSuite) SetupTest() {
+	ks, err := keystone.New(testdata.TestBaseTemplatesFS, testdata.TestPagesTemplatesFS, template.FuncMap{})
+	require.NoError(s.T(), err)
+	s.keystone = ks
+}
+
+func (s *KeystoneTestSuite) TestTemplateIngestion() {
+	s.Equal(
 		[]string{
 			"components/card.tmpl",
 			"components/catalog/description.tmpl",
@@ -25,10 +34,42 @@ func TestTemplateIngestion(t *testing.T) {
 			"pages/test.tmpl",
 			"partials/results.tmpl",
 		},
-		ks.ListAll(),
+		s.keystone.ListAll(),
 	)
+
+	s.True(s.keystone.Exists("pages/test.tmpl"))
 }
 
-func TestEmbeddedPartial(t *testing.T) {
-	assert.NoError(t, nil)
+func (s *KeystoneTestSuite) TestTemplateRetrival() {
+	tmpl, err := s.keystone.Get("pages/catalog/product.tmpl")
+	s.NoError(err)
+	var dst bytes.Buffer
+	require.NoError(s.T(), tmpl.ExecuteTemplate(&dst, filepath.Base("pages/catalog/product.tmpl"), map[string]any{
+		"Name":        "Pen",
+		"Description": "This is a pen, you can write with it!",
+		"Stock":       7,
+		"Price":       "£8.99",
+	}))
+	expected, err := testdata.TestFixtures.ReadFile("fixtures/pen.html")
+	require.NoError(s.T(), err)
+	s.Equal(string(expected), dst.String())
+}
+
+func (s *KeystoneTestSuite) TestTemplateRender() {
+	var dst bytes.Buffer
+	require.NoError(s.T(), s.keystone.Render(&dst, "pages/catalog/product.tmpl", map[string]any{
+		"Name":        "Pen",
+		"Description": "This is a pen, you can write with it!",
+		"Stock":       7,
+		"Price":       "£8.99",
+	}))
+	expected, err := testdata.TestFixtures.ReadFile("fixtures/pen.html")
+	require.NoError(s.T(), err)
+	s.Equal(string(expected), dst.String())
+}
+
+// Test Render on disk change.. good luck writing that test!
+
+func TestKeystoneSuite(t *testing.T) {
+	suite.Run(t, new(KeystoneTestSuite))
 }
