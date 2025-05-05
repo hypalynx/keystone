@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -46,7 +48,12 @@ func NewWithReload(baseTemplateFS fs.ReadDirFS, pagesTemplateFS fs.ReadDirFS, te
 }
 
 func (ks *Keystone) Load() error {
-	base, err := template.New("").Funcs(ks.templateFuncMap).ParseFS(ks.source, "**/*.tmpl")
+	templateFiles, err := ks.allFilesInPath()
+	if err != nil {
+		return err
+	}
+
+	base, err := template.New("").Funcs(ks.templateFuncMap).ParseFS(ks.source, templateFiles...)
 	if err != nil {
 		return err
 	}
@@ -58,6 +65,26 @@ func (ks *Keystone) Load() error {
 	return err
 }
 
+func (ks *Keystone) allFilesInPath() ([]string, error) {
+	fileList := []string{}
+	err := fs.WalkDir(ks.source, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() {
+			fileList = append(fileList, path)
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Printf("Error walking directory: %v\n", err)
+		return fileList, err
+	}
+
+	return fileList, nil
+}
+
 func (ks *Keystone) insertPageTemplates(path string) error {
 	dirContents, err := ks.pagesSource.ReadDir(path)
 	if err != nil {
@@ -66,6 +93,9 @@ func (ks *Keystone) insertPageTemplates(path string) error {
 
 	for _, e := range dirContents {
 		if e.IsDir() {
+			if err := ks.insertPageTemplates(path + "/" + e.Name()); err != nil {
+				return err
+			}
 			continue // recurse here for subdir support
 		}
 
@@ -94,6 +124,24 @@ func (ks *Keystone) Exists(name string) bool {
 		}
 	}
 	return exists
+}
+
+func (ks *Keystone) ListAll() []string {
+	names := []string{}
+
+	for _, tmpl := range ks.baseTemplate.Templates() {
+		name := tmpl.Name()
+		if name != "" && name != "content" && strings.Contains(name, "/") {
+			names = append(names, name)
+		}
+	}
+
+	for name := range ks.templateCache {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+	return names
 }
 
 // read in

@@ -1,0 +1,11 @@
+{{ template "layouts/default.tmpl" . }}
+
+{{ define "content" }}
+<div>
+    <div>This is a product page</div>
+    <div>{{ .Name }}</div>
+    {{ template "components/catalog/description.tmpl" .Description }}
+    <div>{{ .Stock }}</div>
+    <div>{{ .Price }}</div>
+</div>
+{{ end }}
