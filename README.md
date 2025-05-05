@@ -9,7 +9,7 @@ A small Golang library that makes working with the stdlib `html/template` easy a
 go get github.com/hypalynx/keystone@latest
 
 # Or pin by version (also latest released)
-go get github.com/hypalynx/keystone@v0.5.0
+go get github.com/hypalynx/keystone@v0.5.1
 ```
 
 ## Features
