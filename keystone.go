@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -14,14 +15,18 @@ type Registry struct {
 	Source        fs.FS
 	FuncMap       template.FuncMap
 	Reload        bool
+	Extensions    []string
 	baseTemplate  *template.Template
 	templateCache map[string]*template.Template
 	mu            sync.RWMutex
 }
 
+var defaultExtensions = []string{"tmpl", "html", "gohtml", "gotmpl", "tpl"}
+
 func New(templateFS fs.FS) (*Registry, error) {
 	ks := &Registry{
 		Source:        templateFS,
+		Extensions:    defaultExtensions,
 		baseTemplate:  &template.Template{},
 		templateCache: make(map[string]*template.Template),
 		FuncMap:       template.FuncMap{},
@@ -36,15 +41,28 @@ func New(templateFS fs.FS) (*Registry, error) {
 	return ks, nil
 }
 
+func (ks *Registry) ensureDefaults() error {
+	if ks.Source == nil {
+		return fmt.Errorf("no keystone.Source provided to source templates from")
+	}
+
+	if ks.Extensions == nil {
+		ks.Extensions = []string{"tmpl", "html", "gohtml", "gotmpl", "tpl"}
+	}
+
+	ks.templateCache = make(map[string]*template.Template)
+
+	return nil
+}
+
 func (ks *Registry) Load() error {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 
-	if ks.Source == nil {
-		return fmt.Errorf("no keystone.Source provided to source templates")
+	err := ks.ensureDefaults()
+	if err != nil {
+		return err
 	}
-
-	ks.templateCache = make(map[string]*template.Template)
 
 	templateFiles, err := ks.allFilesInPath()
 	if err != nil {
@@ -64,13 +82,22 @@ func (ks *Registry) Load() error {
 
 func (ks *Registry) allFilesInPath() ([]string, error) {
 	fileList := []string{}
+
+	extMap := make(map[string]bool)
+	for _, ext := range ks.Extensions {
+		extMap[ext] = true
+	}
+
 	err := fs.WalkDir(ks.Source, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
 		if !d.IsDir() {
-			fileList = append(fileList, path)
+			ext := strings.TrimPrefix(filepath.Ext(path), ".")
+			if len(ks.Extensions) == 0 || extMap[ext] {
+				fileList = append(fileList, path)
+			}
 		}
 		return nil
 	})

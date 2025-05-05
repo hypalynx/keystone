@@ -31,3 +31,13 @@ func TestKeystoneAsPackage(t *testing.T) {
 	}
 	require.NoError(t, ksFromEmbed.Load())
 }
+
+func TestDefaultValues(t *testing.T) {
+	ks := &keystone.Registry{
+		Source: testdata.TestTemplatesFS,
+	}
+
+	require.Equal(t, []string(nil), ks.Extensions)
+	require.NoError(t, ks.Load())
+	require.Equal(t, []string{"tmpl", "html", "gohtml", "gotmpl", "tpl"}, ks.Extensions)
+}
