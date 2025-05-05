@@ -1,0 +1,33 @@
+package keystone_test
+
+import (
+	"html/template"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/hypalynx/keystone"
+	"github.com/hypalynx/keystone/testdata"
+	"github.com/stretchr/testify/require"
+)
+
+func TestKeystoneAsPackage(t *testing.T) {
+	funcMap := template.FuncMap{
+		"upper": strings.ToUpper,
+	}
+
+	diskFS := os.DirFS("./testdata/")
+	ksFromDisk := &keystone.Registry{
+		Source:  diskFS,
+		Reload:  true,
+		FuncMap: funcMap,
+	}
+	require.NoError(t, ksFromDisk.Load())
+
+	ksFromEmbed := &keystone.Registry{
+		Source:  testdata.TestTemplatesFS,
+		Reload:  false,
+		FuncMap: funcMap,
+	}
+	require.NoError(t, ksFromEmbed.Load())
+}

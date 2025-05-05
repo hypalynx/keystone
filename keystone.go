@@ -11,7 +11,7 @@ import (
 )
 
 type Registry struct {
-	Source        fs.ReadDirFS
+	Source        fs.FS
 	FuncMap       template.FuncMap
 	Reload        bool
 	baseTemplate  *template.Template
@@ -19,7 +19,7 @@ type Registry struct {
 	mu            sync.RWMutex
 }
 
-func New(templateFS fs.ReadDirFS) (*Registry, error) {
+func New(templateFS fs.FS) (*Registry, error) {
 	ks := &Registry{
 		Source:        templateFS,
 		baseTemplate:  &template.Template{},
@@ -39,6 +39,10 @@ func New(templateFS fs.ReadDirFS) (*Registry, error) {
 func (ks *Registry) Load() error {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
+
+	if ks.Source == nil {
+		return fmt.Errorf("no keystone.Source provided to source templates")
+	}
 
 	ks.templateCache = make(map[string]*template.Template)
 
@@ -78,13 +82,13 @@ func (ks *Registry) allFilesInPath() ([]string, error) {
 }
 
 func (ks *Registry) insertTemplates(path string) error {
-	dirContents, err := ks.Source.ReadDir(path)
+	dirContents, err := fs.ReadDir(ks.Source, path)
 	if err != nil {
 		return err
 	}
 
 	for _, e := range dirContents {
-		fullPath := path
+		var fullPath string
 		if path != "." {
 			fullPath = path + "/" + e.Name()
 		} else {
