@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hypalynx/keystone/pkg/keystone"
+	"github.com/hypalynx/keystone"
 	"github.com/hypalynx/keystone/testdata"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
